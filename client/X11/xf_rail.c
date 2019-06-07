@@ -138,11 +138,24 @@ void xf_rail_send_client_system_command(xfContext* xfc, UINT32 windowId,
 static void xf_rail_move_window(xfContext* xfc, xfAppWindow* appWindow,
                                 const RAIL_WINDOW_MOVE_ORDER* windowMove)
 {
-	DEBUG_X11("forwarding geometry from X/internal to RDP server: %"PRIu16"x%"PRIu16"+%"PRIu16"+%"PRIu16,
-	          (windowMove->right - windowMove->left),
-	          (windowMove->bottom - windowMove->top),
-	          windowMove->left, windowMove->top);
-	xfc->rail->ClientWindowMove(xfc->rail, windowMove);
+	RAIL_WINDOW_MOVE_ORDER updatedMoveOrder;
+	updatedMoveOrder.windowId = windowMove->windowId;
+
+	INT16 left = windowMove->left - appWindow->windowLeftResizeMargin;
+	INT16 right = windowMove->right + appWindow->windowRightResizeMargin;
+	INT16 top = windowMove->top - appWindow->windowTopResizeMargin;
+	INT16 bottom = windowMove->bottom + appWindow->windowBottomResizeMargin;
+	updatedMoveOrder.left = left;
+	updatedMoveOrder.right = right;
+	updatedMoveOrder.top = top;
+	updatedMoveOrder.bottom = bottom;
+
+	DEBUG_X11("forwarding geometry from X/internal to RDP server: %"PRIu16"x%"PRId16"+%"PRId16"+%"PRId16"\t(%"PRId16",%"PRId16"), (%"PRId16",%"PRId16")",
+			  (right - left), (bottom - top), left, top, updatedMoveOrder.left,
+			  updatedMoveOrder.top, updatedMoveOrder.right,
+			  updatedMoveOrder.bottom);
+
+	xfc->rail->ClientWindowMove(xfc->rail, &updatedMoveOrder);
 }
 
 /**
@@ -290,6 +303,14 @@ void xf_rail_paint(xfContext* xfc, INT32 uleft, INT32 utop, UINT32 uright,
 
 /* RemoteApp Core Protocol Extension */
 
+static BOOL resizeMarginXSet = FALSE;
+static UINT32 resizeMarginLeft = 0;
+static UINT32 resizeMarginRight = 0;
+
+static BOOL resizeMarginYSet = FALSE;
+static UINT32 resizeMarginTop= 0;
+static UINT32 resizeMarginBottom = 0;
+
 static xfAppWindow* xf_rail_window_new(xfContext* xfc,
                                        const WINDOW_ORDER_INFO* orderInfo,
                                        const WINDOW_STATE_ORDER* windowState)
@@ -309,6 +330,17 @@ static xfAppWindow* xf_rail_window_new(xfContext* xfc,
 
     appWindow->dwStyle = windowState->style;
     appWindow->dwExStyle = windowState->extendedStyle;
+
+    if ((orderInfo->fieldFlags & WINDOW_ORDER_FIELD_RESIZE_MARGIN_X) == 0 && resizeMarginXSet) {
+    	DEBUG_X11("using preset X margins: %"PRIu32"\t%"PRIu32, resizeMarginLeft, resizeMarginRight);
+    	appWindow->windowLeftResizeMargin = resizeMarginLeft;
+    	appWindow->windowRightResizeMargin = resizeMarginRight;
+    }
+    if ((orderInfo->fieldFlags & WINDOW_ORDER_FIELD_RESIZE_MARGIN_Y) == 0 && resizeMarginYSet) {
+    	DEBUG_X11("using preset Y margins: %"PRIu32"\t%"PRIu32, resizeMarginTop, resizeMarginBottom);
+    	appWindow->windowTopResizeMargin = resizeMarginTop;
+    	appWindow->windowBottomResizeMargin = resizeMarginBottom;
+    }
 
 	/* Ensure window always gets a window title */
 	if (fieldFlags & WINDOW_ORDER_FIELD_TITLE)
@@ -376,20 +408,32 @@ static BOOL xf_rail_window_common(rdpContext* context,
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_RESIZE_MARGIN_X)
 	{
-		DEBUG_X11("resizeMarginX: 0x%"PRIx32" %"PRId32", %PRId32",
+		DEBUG_X11("resizeMarginX: 0x%"PRIx32" %"PRId32", %"PRId32,
                   appWindow->handle, windowState->resizeMarginLeft,
                   windowState->resizeMarginRight);
 		appWindow->windowLeftResizeMargin = windowState->resizeMarginLeft;
 		appWindow->windowRightResizeMargin = windowState->resizeMarginRight;
+		if (!resizeMarginXSet) {
+			resizeMarginXSet = TRUE;
+			resizeMarginLeft = windowState->resizeMarginLeft;
+			resizeMarginRight = windowState->resizeMarginRight;
+			DEBUG_X11("saved resize margin X: %"PRIu32"\t%"PRIu32, resizeMarginLeft, resizeMarginRight);
+		}
 	}
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_RESIZE_MARGIN_Y)
 	{
-		DEBUG_X11("resizeMarginY: 0x%"PRIx32" %"PRId32", %PRId32",
+		DEBUG_X11("resizeMarginY: 0x%"PRIx32" %"PRId32", %"PRId32,
                   appWindow->handle, windowState->resizeMarginTop,
                   windowState->resizeMarginBottom);
 		appWindow->windowTopResizeMargin = windowState->resizeMarginTop;
 		appWindow->windowBottomResizeMargin = windowState->resizeMarginBottom;
+		if (!resizeMarginYSet) {
+			resizeMarginYSet = TRUE;
+			resizeMarginTop = windowState->resizeMarginTop;
+			resizeMarginBottom = windowState->resizeMarginBottom;
+			DEBUG_X11("saved resize margin Y: %"PRIu32"\t%"PRIu32, resizeMarginTop, resizeMarginBottom);
+		}
 	}
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_WND_OFFSET)
@@ -397,8 +441,8 @@ static BOOL xf_rail_window_common(rdpContext* context,
 		DEBUG_X11("windowOffset: 0x%"PRIx32" (%"PRIu16", %"PRIu16")",
                   appWindow->handle, windowState->windowOffsetX,
                   windowState->windowOffsetY);
-		appWindow->windowOffsetX = windowState->windowOffsetX - appWindow->windowLeftResizeMargin;
-		appWindow->windowOffsetY = windowState->windowOffsetY - appWindow->windowTopResizeMargin;
+		appWindow->windowOffsetX = windowState->windowOffsetX;
+		appWindow->windowOffsetY = windowState->windowOffsetY;
 	}
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_WND_SIZE)
@@ -406,12 +450,8 @@ static BOOL xf_rail_window_common(rdpContext* context,
 		DEBUG_X11("window size: 0x%"PRIx32" (%"PRIu16", %"PRIu16")",
                   appWindow->handle, windowState->windowWidth,
                   windowState->windowHeight);
-		appWindow->windowWidth = windowState->windowWidth
-		                         + appWindow->windowLeftResizeMargin
-		                         + appWindow->windowRightResizeMargin;
-		appWindow->windowHeight = windowState->windowHeight
-		                          + appWindow->windowTopResizeMargin
-		                          + appWindow->windowBottomResizeMargin;
+		appWindow->windowWidth = windowState->windowWidth;
+		appWindow->windowHeight = windowState->windowHeight;
 	}
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_OWNER)

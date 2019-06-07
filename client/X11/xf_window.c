@@ -1072,8 +1072,8 @@ void xf_UpdateWindowArea(xfContext* xfc, xfAppWindow* appWindow, int x, int y,
 	if (appWindow->surfaceId < UINT16_MAX)
 		return;
 
-	ax = x + appWindow->windowOffsetX + appWindow->windowLeftResizeMargin;
-	ay = y + appWindow->windowOffsetY + appWindow->windowTopResizeMargin;
+	ax = x + appWindow->windowOffsetX/* + appWindow->windowLeftResizeMargin*/;
+	ay = y + appWindow->windowOffsetY/* + appWindow->windowTopResizeMargin*/;
 
 	if (ax + width > appWindow->windowOffsetX + appWindow->width)
 		width = (appWindow->windowOffsetX + appWindow->width - 1) - ax;

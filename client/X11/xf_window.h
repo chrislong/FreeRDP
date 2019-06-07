@@ -109,7 +109,7 @@ struct xf_app_window
 	INT32 clientOffsetY;
 	UINT32 clientAreaWidth;
 	UINT32 clientAreaHeight;
-    UINT32 windowLeftResizeMargin;
+	UINT32 windowLeftResizeMargin;
 	UINT32 windowRightResizeMargin;
 	UINT32 windowTopResizeMargin;
     UINT32 windowBottomResizeMargin;

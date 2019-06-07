@@ -753,9 +753,10 @@ BOOL freerdp_image_scale(BYTE* pDstData, DWORD DstFormat, UINT32 nDstStep,
                          UINT32 nXSrc, UINT32 nYSrc, UINT32 nSrcWidth, UINT32 nSrcHeight)
 {
 	BOOL rc = FALSE;
+#if defined(SWSCALE_FOUND) || defined(CAIRO_FOUND)
 	const BYTE* src = &pSrcData[nXSrc * GetBytesPerPixel(SrcFormat) + nYSrc * nSrcStep];
 	BYTE* dst = &pDstData[nXDst * GetBytesPerPixel(DstFormat) + nYDst * nDstStep];
-
+#endif
 	/* direct copy is much faster than scaling, so check if we can simply copy... */
 	if ((nDstWidth == nSrcWidth) && (nDstHeight == nSrcHeight))
 	{

@@ -993,7 +993,7 @@ static void dump_monitored_desktop(wLog *log, const char *msg, const WINDOW_ORDE
 	char tmpBuffer[1000];
 	size_t rem = sizeof(buffer) - 1;
 
-	DUMP_APPEND(msg);
+	DUMP_APPEND("%s", msg);
 
 	if (orderInfo->fieldFlags & WINDOW_ORDER_FIELD_DESKTOP_ACTIVE_WND)
 		DUMP_APPEND(" activeWindowId=0x%"PRIx32"", monitored->activeWindowId);
